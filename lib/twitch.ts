@@ -106,13 +106,12 @@ export async function getTopGamesWithViewerCounts(gameCount = 5) {
   // We fetch 100 streams per game to get a better total
   const results = await Promise.all(
     gamesData.data.map(async (game) => {
-      // Fetch multiple pages of streams to get more accurate viewer totals
+      // Paginate through ALL live streams for this game
       let totalViewers = 0;
       let streamCount = 0;
       let cursor: string | undefined;
 
-      // Fetch up to 3 pages (300 streams) per game for accuracy
-      for (let page = 0; page < 3; page++) {
+      while (true) {
         const params: Record<string, string> = {
           game_id: game.id,
           first: "100",
@@ -131,6 +130,7 @@ export async function getTopGamesWithViewerCounts(gameCount = 5) {
         }
 
         cursor = pageData.pagination?.cursor;
+        // Stop when no more pages or empty results
         if (!cursor || pageData.data.length < 100) break;
       }
 
