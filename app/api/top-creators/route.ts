@@ -53,12 +53,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Try to enrich with follower data from daily_creator_stats
+    // Enrich with follower data from multiple sources
     const creatorIds = Array.from(creatorMap.keys());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const followerMap = new Map<string, { followerCount: number; followerGrowth: number }>();
 
     if (creatorIds.length > 0) {
+      // Source 1: daily_creator_stats (best — has growth data)
       const { data: dailyStats } = await supabaseAdmin
         .from("daily_creator_stats")
         .select("creator_id, follower_count, follower_growth, date")
@@ -73,6 +74,35 @@ export async function GET(request: NextRequest) {
               followerCount: stat.follower_count,
               followerGrowth: stat.follower_growth ?? 0,
             });
+          }
+        }
+      }
+
+      // Source 2: creator_snapshots with non-zero follower_count (from full ingestion)
+      const missingIds = creatorIds.filter((id) => {
+        const snap = creatorMap.get(id);
+        const hasFromSnap = snap?.follower_count > 0;
+        const hasFromDaily = followerMap.has(id);
+        return !hasFromSnap && !hasFromDaily;
+      });
+
+      if (missingIds.length > 0) {
+        const { data: followerSnaps } = await supabaseAdmin
+          .from("creator_snapshots")
+          .select("creator_id, follower_count")
+          .in("creator_id", missingIds)
+          .gt("follower_count", 0)
+          .order("follower_count", { ascending: false })
+          .limit(200);
+
+        if (followerSnaps) {
+          for (const snap of followerSnaps) {
+            if (!followerMap.has(snap.creator_id)) {
+              followerMap.set(snap.creator_id, {
+                followerCount: snap.follower_count,
+                followerGrowth: 0,
+              });
+            }
           }
         }
       }
