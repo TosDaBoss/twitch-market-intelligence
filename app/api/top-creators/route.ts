@@ -8,14 +8,31 @@ export async function GET(request: NextRequest) {
   );
 
   try {
-    // Get recent creator snapshots (last 30 min) for current viewer counts
+    // Try recent snapshots first, fall back to latest available
+    let recentSnaps;
+    let snapError;
+
     const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const { data: recentSnaps, error: snapError } = await supabaseAdmin
+    const recent = await supabaseAdmin
       .from("creator_snapshots")
       .select("*, creators(login, display_name, profile_image_url), games:game_id(name)")
       .gte("captured_at", thirtyMinAgo)
       .order("viewer_count", { ascending: false })
       .limit(500);
+
+    if (recent.data && recent.data.length > 0) {
+      recentSnaps = recent.data;
+      snapError = recent.error;
+    } else {
+      // Fallback: get the most recent snapshots regardless of age
+      const fallback = await supabaseAdmin
+        .from("creator_snapshots")
+        .select("*, creators(login, display_name, profile_image_url), games:game_id(name)")
+        .order("viewer_count", { ascending: false })
+        .limit(500);
+      recentSnaps = fallback.data;
+      snapError = fallback.error;
+    }
 
     if (snapError) {
       console.error("Top creators API error:", snapError);
