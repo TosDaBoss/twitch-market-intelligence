@@ -4,14 +4,32 @@ import { GameSnapshot } from "@/lib/types";
 
 export async function GET() {
   try {
-    // Get game snapshots from the last 15 minutes to avoid stale data
+    // Try recent snapshots first, then fall back to latest available
+    let latestSnapshots;
+    let snapError;
+
+    // First try last 15 minutes
     const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data: latestSnapshots, error: snapError } = await supabaseAdmin
+    const recent = await supabaseAdmin
       .from("game_snapshots")
       .select("*, games(*)")
       .gte("captured_at", fifteenMinAgo)
       .order("captured_at", { ascending: false })
       .limit(50);
+
+    if (recent.data && recent.data.length > 0) {
+      latestSnapshots = recent.data;
+      snapError = recent.error;
+    } else {
+      // Fallback: get the most recent snapshots regardless of age
+      const fallback = await supabaseAdmin
+        .from("game_snapshots")
+        .select("*, games(*)")
+        .order("captured_at", { ascending: false })
+        .limit(50);
+      latestSnapshots = fallback.data;
+      snapError = fallback.error;
+    }
 
     if (snapError) {
       console.error("Supabase snapshots error:", snapError);
