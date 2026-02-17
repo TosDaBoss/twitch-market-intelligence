@@ -52,12 +52,6 @@ async function helixGet<T>(endpoint: string, params?: Record<string, string>): P
 
 // ── Helix Response Types ──
 
-interface TwitchGame {
-  id: string;
-  name: string;
-  box_art_url: string;
-}
-
 interface TwitchStream {
   id: string;
   user_id: string;
@@ -84,11 +78,44 @@ interface TwitchFollowerCount {
 
 // ── Public API ──
 
-export async function getTopGames(limit = 5): Promise<TwitchGame[]> {
-  const data = await helixGet<{ data: TwitchGame[] }>("games/top", {
-    first: String(limit),
+/**
+ * Get top games by viewer count.
+ * Uses /streams to aggregate total viewers per game (more accurate than /games/top).
+ * Fetches a large batch of streams and groups by game.
+ */
+export async function getTopGamesWithViewerCounts(gameCount = 5) {
+  // Fetch top 100 streams to get accurate viewer totals
+  const data = await helixGet<{ data: TwitchStream[] }>("streams", {
+    first: "100",
+    type: "live",
   });
-  return data.data;
+
+  // Group by game and sum viewers
+  const gameMap = new Map<
+    string,
+    { id: string; name: string; totalViewers: number; streamCount: number }
+  >();
+
+  for (const stream of data.data) {
+    if (!stream.game_id) continue;
+    const existing = gameMap.get(stream.game_id);
+    if (existing) {
+      existing.totalViewers += stream.viewer_count;
+      existing.streamCount += 1;
+    } else {
+      gameMap.set(stream.game_id, {
+        id: stream.game_id,
+        name: stream.game_name,
+        totalViewers: stream.viewer_count,
+        streamCount: 1,
+      });
+    }
+  }
+
+  // Sort by total viewers and take top N
+  return Array.from(gameMap.values())
+    .sort((a, b) => b.totalViewers - a.totalViewers)
+    .slice(0, gameCount);
 }
 
 export async function getStreamsByGame(
@@ -106,7 +133,6 @@ export async function getStreamsByGame(
 export async function getUsers(userIds: string[]): Promise<TwitchUser[]> {
   if (userIds.length === 0) return [];
 
-  // Helix allows up to 100 IDs per request
   const chunks: string[][] = [];
   for (let i = 0; i < userIds.length; i += 100) {
     chunks.push(userIds.slice(i, i + 100));
@@ -144,37 +170,81 @@ export async function getChannelFollowerCount(broadcasterId: string): Promise<nu
     });
     return data.total;
   } catch {
-    // Follower count endpoint may require user token for some channels
     return 0;
   }
 }
 
-export async function getTopGamesWithStreams(gameCount = 5, creatorsPerGame = 10) {
-  const games = await getTopGames(gameCount);
+/**
+ * FAST snapshot: Top 5 games + top 10 creators per game.
+ * Used every 5 minutes. Skips follower counts to stay fast.
+ */
+export async function getSnapshotData(gameCount = 5, creatorsPerGame = 10) {
+  const topGames = await getTopGamesWithViewerCounts(gameCount);
 
   const results = await Promise.all(
-    games.map(async (game) => {
+    topGames.map(async (game) => {
       const streams = await getStreamsByGame(game.id, creatorsPerGame);
 
-      // Get user profiles for follower info
       const userIds = streams.map((s) => s.user_id);
       const users = await getUsers(userIds);
       const userMap = new Map(users.map((u) => [u.id, u]));
-
-      // Get follower counts (in parallel, with concurrency limit)
-      const followerCounts = await Promise.all(
-        streams.map((s) => getChannelFollowerCount(s.user_id))
-      );
-
-      const totalViewers = streams.reduce((sum, s) => sum + s.viewer_count, 0);
 
       return {
         game: {
           id: game.id,
           name: game.name,
-          boxArtUrl: game.box_art_url,
-          totalViewers,
-          totalChannels: streams.length,
+          boxArtUrl: "",
+          totalViewers: game.totalViewers,
+          totalChannels: game.streamCount,
+        },
+        creators: streams.map((stream) => {
+          const user = userMap.get(stream.user_id);
+          return {
+            id: stream.user_id,
+            login: stream.user_login,
+            displayName: stream.user_name,
+            profileImageUrl: user?.profile_image_url ?? "",
+            gameId: game.id,
+            gameName: game.name,
+            viewerCount: stream.viewer_count,
+            followerCount: 0, // Skipped in fast mode
+            title: stream.title,
+            startedAt: stream.started_at,
+          };
+        }),
+      };
+    })
+  );
+
+  return results;
+}
+
+/**
+ * FULL ingestion: Same as snapshot but includes follower counts.
+ * Used every 4 hours. More expensive due to per-creator API calls.
+ */
+export async function getFullIngestionData(gameCount = 5, creatorsPerGame = 10) {
+  const topGames = await getTopGamesWithViewerCounts(gameCount);
+
+  const results = await Promise.all(
+    topGames.map(async (game) => {
+      const streams = await getStreamsByGame(game.id, creatorsPerGame);
+
+      const userIds = streams.map((s) => s.user_id);
+      const users = await getUsers(userIds);
+      const userMap = new Map(users.map((u) => [u.id, u]));
+
+      const followerCounts = await Promise.all(
+        streams.map((s) => getChannelFollowerCount(s.user_id))
+      );
+
+      return {
+        game: {
+          id: game.id,
+          name: game.name,
+          boxArtUrl: "",
+          totalViewers: game.totalViewers,
+          totalChannels: game.streamCount,
         },
         creators: streams.map((stream, i) => {
           const user = userMap.get(stream.user_id);

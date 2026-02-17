@@ -12,6 +12,7 @@ export function Dashboard() {
     creatorGrowth,
     attention,
     loading,
+    lastUpdated,
     filters,
     selectGame,
     selectCreator,
@@ -28,7 +29,7 @@ export function Dashboard() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <DashboardHeader selectedGameName={null} onClearFilters={() => {}} onRefresh={refresh} />
+        <DashboardHeader selectedGameName={null} lastUpdated={null} onClearFilters={() => {}} onRefresh={refresh} />
         <div className="flex items-center justify-center h-96">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -43,6 +44,7 @@ export function Dashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
       <DashboardHeader
         selectedGameName={selectedGameName}
+        lastUpdated={lastUpdated}
         onClearFilters={() => selectGame(null)}
         onRefresh={refresh}
       />

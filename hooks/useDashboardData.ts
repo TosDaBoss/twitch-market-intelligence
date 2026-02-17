@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   GameSnapshot,
   ViewerTrendPoint,
@@ -9,12 +9,15 @@ import {
   DashboardFilters,
 } from "@/lib/types";
 
+const SNAPSHOT_REFRESH_MS = 60_000; // Refresh snapshot data every 60s on the client
+
 export function useDashboardData() {
   const [snapshots, setSnapshots] = useState<GameSnapshot[]>([]);
   const [viewerTrends, setViewerTrends] = useState<ViewerTrendPoint[]>([]);
   const [creatorGrowth, setCreatorGrowth] = useState<CreatorGrowthPoint[]>([]);
   const [attention, setAttention] = useState<AttentionTier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<DashboardFilters>({
     selectedGameId: null,
@@ -23,6 +26,19 @@ export function useDashboardData() {
     selectedGameIds: [],
   });
 
+  // Fetch snapshot data only (fast, runs frequently)
+  const fetchSnapshots = useCallback(async () => {
+    try {
+      const res = await fetch("/api/snapshots");
+      const data = await res.json();
+      setSnapshots(data.snapshots);
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error("Failed to fetch snapshots:", err);
+    }
+  }, []);
+
+  // Fetch all data (runs on mount and when filters change)
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -46,6 +62,7 @@ export function useDashboardData() {
       setViewerTrends(trendData.data);
       setCreatorGrowth(creatorData.data);
       setAttention(attnData.data);
+      setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     } finally {
@@ -53,9 +70,19 @@ export function useDashboardData() {
     }
   }, [filters.trendPeriod, filters.selectedGameId]);
 
+  // Initial fetch
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Auto-refresh snapshots every 60 seconds
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    intervalRef.current = setInterval(fetchSnapshots, SNAPSHOT_REFRESH_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [fetchSnapshots]);
 
   const selectGame = (gameId: string | null) => {
     setFilters((prev) => ({
@@ -91,6 +118,7 @@ export function useDashboardData() {
     creatorGrowth,
     attention,
     loading,
+    lastUpdated,
     filters,
     selectGame,
     selectCreator,

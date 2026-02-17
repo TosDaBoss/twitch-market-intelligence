@@ -2,11 +2,12 @@
 
 interface Props {
   selectedGameName: string | null;
+  lastUpdated: string | null;
   onClearFilters: () => void;
   onRefresh: () => void;
 }
 
-export function DashboardHeader({ selectedGameName, onClearFilters, onRefresh }: Props) {
+export function DashboardHeader({ selectedGameName, lastUpdated, onClearFilters, onRefresh }: Props) {
   return (
     <header className="flex items-center justify-between py-6 border-b border-border mb-8">
       <div>
@@ -15,6 +16,9 @@ export function DashboardHeader({ selectedGameName, onClearFilters, onRefresh }:
         </h1>
         <p className="text-sm text-muted mt-1">
           Real-time attention flow &amp; creator ecosystem analytics
+          {lastUpdated && (
+            <span className="ml-2 text-xs opacity-60">Updated {lastUpdated}</span>
+          )}
         </p>
       </div>
       <div className="flex items-center gap-3">
