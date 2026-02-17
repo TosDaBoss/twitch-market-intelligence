@@ -4,6 +4,7 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { DashboardHeader } from "./DashboardHeader";
 import { SnapshotOverview } from "./SnapshotOverview";
 import { TrendIntelligence } from "./TrendIntelligence";
+import { TopCreatorsTable } from "./TopCreatorsTable";
 
 export function Dashboard() {
   const {
@@ -56,6 +57,8 @@ export function Dashboard() {
         onSelectGame={selectGame}
         onSelectCreator={selectCreator}
       />
+
+      <TopCreatorsTable />
 
       <TrendIntelligence
         viewerTrends={viewerTrends}
