@@ -4,10 +4,12 @@ import { GameSnapshot } from "@/lib/types";
 
 export async function GET() {
   try {
-    // Get latest game snapshots to find the top 5 games by viewers
+    // Get game snapshots from the last 15 minutes to avoid stale data
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: latestSnapshots, error: snapError } = await supabaseAdmin
       .from("game_snapshots")
       .select("*, games(*)")
+      .gte("captured_at", fifteenMinAgo)
       .order("captured_at", { ascending: false })
       .limit(50);
 

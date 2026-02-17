@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const snapshots = await getFullIngestionData(5, 10);
+    const snapshots = await getFullIngestionData(5, 25);
     const now = new Date().toISOString();
     const today = now.split("T")[0];
 

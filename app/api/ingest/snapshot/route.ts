@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const snapshots = await getSnapshotData(5, 10);
+    const snapshots = await getSnapshotData(5, 25);
     const now = new Date().toISOString();
 
     for (const snapshot of snapshots) {
