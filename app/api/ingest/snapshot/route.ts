@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSnapshotData } from "@/lib/twitch";
+import { getSnapshotData, getTopGlobalStreams } from "@/lib/twitch";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // FAST snapshot — runs every 5 minutes
-// Fetches top 5 games + top 10 creators (no follower counts)
+// Fetches top 5 games + top 25 creators per game + global top 100
 // Updates game_snapshots and creator_snapshots only
 
 function isAuthorized(request: NextRequest): boolean {
@@ -19,7 +19,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const snapshots = await getSnapshotData(5, 25);
+    const [snapshots, globalCreators] = await Promise.all([
+      getSnapshotData(5, 25),
+      getTopGlobalStreams(100),
+    ]);
     const now = new Date().toISOString();
 
     for (const snapshot of snapshots) {
@@ -62,11 +65,41 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Store global top 100 creators (viewer snapshots, no follower counts)
+    for (const creator of globalCreators) {
+      await supabaseAdmin.from("creators").upsert({
+        id: creator.id,
+        login: creator.login,
+        display_name: creator.displayName,
+        profile_image_url: creator.profileImageUrl,
+      });
+
+      // Upsert their game too if we have one
+      if (creator.gameId) {
+        await supabaseAdmin.from("games").upsert({
+          id: creator.gameId,
+          name: creator.gameName,
+          box_art_url: "",
+        });
+      }
+
+      await supabaseAdmin.from("creator_snapshots").insert({
+        creator_id: creator.id,
+        game_id: creator.gameId || null,
+        viewer_count: creator.viewerCount,
+        follower_count: creator.followerCount,
+        title: creator.title,
+        started_at: creator.startedAt,
+        captured_at: now,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       type: "snapshot",
       gamesIngested: snapshots.length,
       creatorsIngested: snapshots.reduce((sum, s) => sum + s.creators.length, 0),
+      globalCreatorsIngested: globalCreators.length,
       timestamp: now,
     });
   } catch (error) {

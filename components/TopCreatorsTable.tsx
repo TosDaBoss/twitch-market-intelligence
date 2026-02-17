@@ -38,7 +38,7 @@ export function TopCreatorsTable() {
   return (
     <CollapsibleSection
       title="Top 100 Streamers"
-      subtitle="Ranked by follower count across all tracked games"
+      subtitle="Ranked by live viewer count across all of Twitch"
       defaultOpen={false}
     >
       {loading ? (

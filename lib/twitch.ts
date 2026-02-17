@@ -203,6 +203,75 @@ export async function getChannelFollowerCount(broadcasterId: string): Promise<nu
 }
 
 /**
+ * Get the top live streams across ALL of Twitch (no game filter).
+ * Returns up to `limit` streams sorted by viewer count descending.
+ */
+export async function getTopGlobalStreams(limit = 100) {
+  const streams: TwitchStream[] = [];
+  let cursor: string | undefined;
+
+  while (streams.length < limit) {
+    const params: Record<string, string> = {
+      first: String(Math.min(100, limit - streams.length)),
+      type: "live",
+    };
+    if (cursor) params.after = cursor;
+
+    const pageData = await helixGet<{
+      data: TwitchStream[];
+      pagination?: { cursor?: string };
+    }>("streams", params);
+
+    streams.push(...pageData.data);
+    cursor = pageData.pagination?.cursor;
+    if (!cursor || pageData.data.length === 0) break;
+  }
+
+  // Get user profile images
+  const userIds = [...new Set(streams.map((s) => s.user_id))];
+  const users = await getUsers(userIds);
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return streams.slice(0, limit).map((stream) => {
+    const user = userMap.get(stream.user_id);
+    return {
+      id: stream.user_id,
+      login: stream.user_login,
+      displayName: stream.user_name,
+      profileImageUrl: user?.profile_image_url ?? "",
+      gameId: stream.game_id,
+      gameName: stream.game_name,
+      viewerCount: stream.viewer_count,
+      followerCount: 0,
+      title: stream.title,
+      startedAt: stream.started_at,
+    };
+  });
+}
+
+/**
+ * Same as getTopGlobalStreams but also fetches follower counts.
+ * Used in full ingestion (every 4 hours).
+ */
+export async function getTopGlobalStreamsWithFollowers(limit = 100) {
+  const creators = await getTopGlobalStreams(limit);
+
+  // Fetch follower counts in parallel (batched to avoid rate limits)
+  const batchSize = 20;
+  for (let i = 0; i < creators.length; i += batchSize) {
+    const batch = creators.slice(i, i + batchSize);
+    const counts = await Promise.all(
+      batch.map((c) => getChannelFollowerCount(c.id))
+    );
+    counts.forEach((count, j) => {
+      creators[i + j].followerCount = count;
+    });
+  }
+
+  return creators;
+}
+
+/**
  * FAST snapshot: Top 5 games + top 10 creators per game.
  * Used every 5 minutes. Skips follower counts to stay fast.
  */
