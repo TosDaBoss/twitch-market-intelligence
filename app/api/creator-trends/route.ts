@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { generateCreatorGrowth } from "@/lib/mockData";
 
 export async function GET(request: NextRequest) {
   const gameId = request.nextUrl.searchParams.get("gameId") ?? undefined;
@@ -17,8 +16,13 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query.limit(200);
 
-    if (error || !data || data.length === 0) {
-      return NextResponse.json({ data: generateCreatorGrowth(gameId), gameId, source: "mock" });
+    if (error) {
+      console.error("Creator trends API error:", error);
+      return NextResponse.json({ data: [], gameId, source: "error", error: error.message });
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json({ data: [], gameId, source: "empty" });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,7 +37,8 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ data: points, gameId, source: "live" });
-  } catch {
-    return NextResponse.json({ data: generateCreatorGrowth(gameId), gameId, source: "mock" });
+  } catch (error) {
+    console.error("Creator trends API error:", error);
+    return NextResponse.json({ data: [], gameId, source: "error" });
   }
 }

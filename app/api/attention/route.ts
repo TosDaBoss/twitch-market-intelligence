@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { generateAttentionData } from "@/lib/mockData";
 
 export async function GET(request: NextRequest) {
   const gameId = request.nextUrl.searchParams.get("gameId") ?? undefined;
@@ -20,11 +19,15 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query.limit(1000);
 
-    if (error || !data || data.length === 0) {
-      return NextResponse.json({ data: generateAttentionData(gameId), gameId, source: "mock" });
+    if (error) {
+      console.error("Attention API error:", error);
+      return NextResponse.json({ data: [], gameId, source: "error", error: error.message });
     }
 
-    // Group by date + game, compute concentration tiers
+    if (!data || data.length === 0) {
+      return NextResponse.json({ data: [], gameId, source: "empty" });
+    }
+
     const grouped = new Map<string, { gameId: string; gameName: string; viewers: number[] }>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data.forEach((row: any) => {
@@ -54,7 +57,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data: tiers, gameId, source: "live" });
-  } catch {
-    return NextResponse.json({ data: generateAttentionData(gameId), gameId, source: "mock" });
+  } catch (error) {
+    console.error("Attention API error:", error);
+    return NextResponse.json({ data: [], gameId, source: "error" });
   }
 }

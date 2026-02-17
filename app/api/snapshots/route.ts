@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { generateSnapshots } from "@/lib/mockData";
 import { GameSnapshot } from "@/lib/types";
 
 export async function GET() {
   try {
-    const { data: games } = await supabaseAdmin
+    const { data: games, error: gamesError } = await supabaseAdmin
       .from("games")
       .select("*")
       .limit(5);
 
+    if (gamesError) {
+      console.error("Supabase games error:", gamesError);
+      return NextResponse.json({
+        snapshots: [],
+        updatedAt: new Date().toISOString(),
+        source: "error",
+        error: gamesError.message,
+      });
+    }
+
     if (!games || games.length === 0) {
       return NextResponse.json({
-        snapshots: generateSnapshots(),
+        snapshots: [],
         updatedAt: new Date().toISOString(),
-        source: "mock",
+        source: "empty",
       });
     }
 
@@ -70,9 +79,10 @@ export async function GET() {
   } catch (error) {
     console.error("Snapshots API error:", error);
     return NextResponse.json({
-      snapshots: generateSnapshots(),
+      snapshots: [],
       updatedAt: new Date().toISOString(),
-      source: "mock",
+      source: "error",
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }

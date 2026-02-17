@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { generateViewerTrends } from "@/lib/mockData";
 
 export async function GET(request: NextRequest) {
   const period = request.nextUrl.searchParams.get("period") === "30d" ? "30d" : "7d";
@@ -14,8 +13,13 @@ export async function GET(request: NextRequest) {
       .gte("date", since)
       .order("date", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return NextResponse.json({ data: generateViewerTrends(period), period, source: "mock" });
+    if (error) {
+      console.error("Trends API error:", error);
+      return NextResponse.json({ data: [], period, source: "error", error: error.message });
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json({ data: [], period, source: "empty" });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +31,8 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ data: points, period, source: "live" });
-  } catch {
-    return NextResponse.json({ data: generateViewerTrends(period), period, source: "mock" });
+  } catch (error) {
+    console.error("Trends API error:", error);
+    return NextResponse.json({ data: [], period, source: "error" });
   }
 }

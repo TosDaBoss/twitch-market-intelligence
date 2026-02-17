@@ -5,6 +5,7 @@ import { CollapsibleSection } from "./SectionHeader";
 import { ViewerMomentumChart } from "./charts/ViewerMomentumChart";
 import { CreatorGrowthChart } from "./charts/CreatorGrowthChart";
 import { AttentionChart } from "./charts/AttentionChart";
+import { EmptyState } from "./EmptyState";
 
 interface Props {
   viewerTrends: ViewerTrendPoint[];
@@ -40,14 +41,21 @@ export function TrendIntelligence({
         {/* Viewer Momentum */}
         <div className="rounded-xl border border-border bg-surface p-5">
           <h3 className="text-lg font-semibold mb-4">Viewer Momentum</h3>
-          <ViewerMomentumChart
-            data={viewerTrends}
-            period={trendPeriod}
-            onPeriodChange={onPeriodChange}
-            selectedGameId={selectedGameId}
-            selectedGameIds={selectedGameIds}
-            onToggleGame={onToggleGame}
-          />
+          {viewerTrends.length === 0 ? (
+            <EmptyState
+              title="No trend data yet"
+              message="Trend data requires multiple ingestion cycles. Check back after the full ingestion has run a few times."
+            />
+          ) : (
+            <ViewerMomentumChart
+              data={viewerTrends}
+              period={trendPeriod}
+              onPeriodChange={onPeriodChange}
+              selectedGameId={selectedGameId}
+              selectedGameIds={selectedGameIds}
+              onToggleGame={onToggleGame}
+            />
+          )}
         </div>
 
         {/* Creator Growth Velocity */}
@@ -59,12 +67,19 @@ export function TrendIntelligence({
               <span className="ml-1 text-accent">(filtered by selected game)</span>
             )}
           </p>
-          <CreatorGrowthChart
-            data={creatorGrowth}
-            selectedGameId={selectedGameId}
-            selectedCreatorId={selectedCreatorId}
-            onCreatorClick={onCreatorClick}
-          />
+          {creatorGrowth.length === 0 ? (
+            <EmptyState
+              title="No creator growth data yet"
+              message="Creator growth data requires the full ingestion (runs every 4 hours) to collect follower counts over time."
+            />
+          ) : (
+            <CreatorGrowthChart
+              data={creatorGrowth}
+              selectedGameId={selectedGameId}
+              selectedCreatorId={selectedCreatorId}
+              onCreatorClick={onCreatorClick}
+            />
+          )}
         </div>
 
         {/* Attention Concentration */}
@@ -76,10 +91,17 @@ export function TrendIntelligence({
               <span className="ml-1 text-accent">(filtered by selected game)</span>
             )}
           </p>
-          <AttentionChart
-            data={attention}
-            selectedGameId={selectedGameId}
-          />
+          {attention.length === 0 ? (
+            <EmptyState
+              title="No attention data yet"
+              message="Attention concentration data builds up from creator snapshots. It will populate after a few ingestion cycles."
+            />
+          ) : (
+            <AttentionChart
+              data={attention}
+              selectedGameId={selectedGameId}
+            />
+          )}
         </div>
       </div>
     </CollapsibleSection>

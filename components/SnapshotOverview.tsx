@@ -3,6 +3,7 @@
 import { GameSnapshot } from "@/lib/types";
 import { GameCard } from "./GameCard";
 import { CollapsibleSection } from "./SectionHeader";
+import { EmptyState } from "./EmptyState";
 
 interface Props {
   snapshots: GameSnapshot[];
@@ -24,22 +25,29 @@ export function SnapshotOverview({
       title="Snapshot Overview"
       subtitle="Top games by live viewers right now"
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-2">
-        {snapshots
-          .sort((a, b) => b.game.totalViewers - a.game.totalViewers)
-          .slice(0, 5)
-          .map((snapshot) => (
-            <GameCard
-              key={snapshot.game.id}
-              snapshot={snapshot}
-              isSelected={selectedGameId === snapshot.game.id}
-              isExpanded={selectedGameId === snapshot.game.id}
-              onSelect={onSelectGame}
-              onCreatorClick={onSelectCreator}
-              selectedCreatorId={selectedCreatorId}
-            />
-          ))}
-      </div>
+      {snapshots.length === 0 ? (
+        <EmptyState
+          title="No live data available"
+          message="Waiting for Twitch data ingestion. The snapshot cron runs every 5 minutes — data will appear shortly."
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-2">
+          {snapshots
+            .sort((a, b) => b.game.totalViewers - a.game.totalViewers)
+            .slice(0, 5)
+            .map((snapshot) => (
+              <GameCard
+                key={snapshot.game.id}
+                snapshot={snapshot}
+                isSelected={selectedGameId === snapshot.game.id}
+                isExpanded={selectedGameId === snapshot.game.id}
+                onSelect={onSelectGame}
+                onCreatorClick={onSelectCreator}
+                selectedCreatorId={selectedCreatorId}
+              />
+            ))}
+        </div>
+      )}
     </CollapsibleSection>
   );
 }
