@@ -78,44 +78,72 @@ interface TwitchFollowerCount {
 
 // ── Public API ──
 
+interface TwitchGame {
+  id: string;
+  name: string;
+  box_art_url: string;
+  igdb_id: string;
+}
+
 /**
- * Get top games by viewer count.
- * Uses /streams to aggregate total viewers per game (more accurate than /games/top).
- * Fetches a large batch of streams and groups by game.
+ * Get top games with their total viewer counts directly from Twitch.
+ * The /games/top endpoint is not available via Helix, so we use /streams
+ * with pagination to get a more complete picture. However, the most accurate
+ * approach is to get the top games list and then query total viewers per game
+ * using the /streams endpoint with a summary.
+ *
+ * We fetch top games from /games/top (which is sorted by viewer count)
+ * then for each game, fetch one page of streams to get the viewer total
+ * from the pagination metadata.
  */
 export async function getTopGamesWithViewerCounts(gameCount = 5) {
-  // Fetch top 100 streams to get accurate viewer totals
-  const data = await helixGet<{ data: TwitchStream[] }>("streams", {
-    first: "100",
-    type: "live",
+  // /games/top returns games sorted by current viewer count
+  const gamesData = await helixGet<{ data: TwitchGame[] }>("games/top", {
+    first: String(gameCount),
   });
 
-  // Group by game and sum viewers
-  const gameMap = new Map<
-    string,
-    { id: string; name: string; totalViewers: number; streamCount: number }
-  >();
+  // For each game, fetch streams to count total viewers
+  // We fetch 100 streams per game to get a better total
+  const results = await Promise.all(
+    gamesData.data.map(async (game) => {
+      // Fetch multiple pages of streams to get more accurate viewer totals
+      let totalViewers = 0;
+      let streamCount = 0;
+      let cursor: string | undefined;
 
-  for (const stream of data.data) {
-    if (!stream.game_id) continue;
-    const existing = gameMap.get(stream.game_id);
-    if (existing) {
-      existing.totalViewers += stream.viewer_count;
-      existing.streamCount += 1;
-    } else {
-      gameMap.set(stream.game_id, {
-        id: stream.game_id,
-        name: stream.game_name,
-        totalViewers: stream.viewer_count,
-        streamCount: 1,
-      });
-    }
-  }
+      // Fetch up to 3 pages (300 streams) per game for accuracy
+      for (let page = 0; page < 3; page++) {
+        const params: Record<string, string> = {
+          game_id: game.id,
+          first: "100",
+          type: "live",
+        };
+        if (cursor) params.after = cursor;
 
-  // Sort by total viewers and take top N
-  return Array.from(gameMap.values())
-    .sort((a, b) => b.totalViewers - a.totalViewers)
-    .slice(0, gameCount);
+        const pageData = await helixGet<{
+          data: TwitchStream[];
+          pagination?: { cursor?: string };
+        }>("streams", params);
+
+        for (const stream of pageData.data) {
+          totalViewers += stream.viewer_count;
+          streamCount += 1;
+        }
+
+        cursor = pageData.pagination?.cursor;
+        if (!cursor || pageData.data.length < 100) break;
+      }
+
+      return {
+        id: game.id,
+        name: game.name,
+        totalViewers,
+        streamCount,
+      };
+    })
+  );
+
+  return results.sort((a, b) => b.totalViewers - a.totalViewers);
 }
 
 export async function getStreamsByGame(
