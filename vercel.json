@@ -4,12 +4,8 @@
   "regions": ["iad1"],
   "crons": [
     {
-      "path": "/api/ingest/snapshot",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/ingest",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 23 * * *"
     }
   ]
 }
